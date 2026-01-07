@@ -1,0 +1,15 @@
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\bin\Debug\net8.0\TestServerClientProgram.exe
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\bin\Debug\net8.0\TestServerClientProgram.deps.json
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\bin\Debug\net8.0\TestServerClientProgram.runtimeconfig.json
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\bin\Debug\net8.0\TestServerClientProgram.dll
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\bin\Debug\net8.0\TestServerClientProgram.pdb
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\obj\Debug\net8.0\TestServerClientProgram.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\obj\Debug\net8.0\TestServerClientProgram.AssemblyInfoInputs.cache
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\obj\Debug\net8.0\TestServerClientProgram.AssemblyInfo.cs
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\obj\Debug\net8.0\TestServerClientProgram.csproj.CoreCompileInputs.cache
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\obj\Debug\net8.0\TestServerClientProgram.sourcelink.json
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\obj\Debug\net8.0\TestServerClientProgram.dll
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\obj\Debug\net8.0\refint\TestServerClientProgram.dll
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\obj\Debug\net8.0\TestServerClientProgram.pdb
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\obj\Debug\net8.0\TestServerClientProgram.genruntimeconfig.cache
+C:\Users\machine shop\source\repos\TestServerClientProgram\TestServerClientProgram\obj\Debug\net8.0\ref\TestServerClientProgram.dll
