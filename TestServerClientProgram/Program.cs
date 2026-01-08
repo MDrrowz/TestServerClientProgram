@@ -1,8 +1,5 @@
-﻿using System.Collections.Specialized;
-using System.Net.Http;
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using System.Net;
-using System.Linq;
 
 
 // Same model as the server
@@ -15,8 +12,8 @@ public class DataItem
 class Program
 {
     
-    static string[] keys = ["score", "place", "color"];
-    static int[] values = [123, 430, 69];
+    static readonly string[] keys = ["score", "place", "color"];
+    static readonly int[] values = [123, 430, 69];
     
     static async Task Main()
     {
@@ -29,7 +26,7 @@ class Program
         {
             int index = Array.IndexOf(keys, key);
             
-            Console.WriteLine($"index={index}, key={key}");
+            // Console.WriteLine($"index={index}, key={key}");
             
             var item = new DataItem
             {
@@ -96,11 +93,17 @@ class Program
             }
             else
             {
-                postResponse.EnsureSuccessStatusCode();
-                Console.WriteLine("Data uploaded.");
-            }         
-            
-                     
+                try                
+                {
+                    postResponse.EnsureSuccessStatusCode();
+                    Console.WriteLine("Data uploaded.");
+                }
+                catch(Exception ex)
+                {
+                    Console.WriteLine("Unexpected error:");
+                    Console.WriteLine(ex);                    
+                }
+            }       
         }
         catch (HttpRequestException ex)
         {
