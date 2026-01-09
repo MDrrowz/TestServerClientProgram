@@ -15,7 +15,7 @@ class Program
     static readonly string[] keys = ["score", "place", "color"];
     static readonly int[] values = [123, 430, 69];
 	
-	static const string NGROK_URL = "<ngrok url here>"
+	const string NGROK_URL = "https://sulkiest-lucina-dandyish.ngrok-free.dev";
     
     static async Task Main()
     {
