@@ -14,12 +14,14 @@ class Program
     
     static readonly string[] keys = ["score", "place", "color"];
     static readonly int[] values = [123, 430, 69];
+	
+	static const string NGROK_URL = "<ngrok url here>"
     
     static async Task Main()
     {
         using HttpClient client = new()
         {
-            BaseAddress = new Uri("http://localhost:5000/")
+            BaseAddress = new Uri(NGROK_URL)
         };
         
         foreach (string key in keys)
@@ -49,7 +51,7 @@ class Program
         try
         {
             List<DataItem>? allData =
-                await client.GetFromJsonAsync<List<DataItem>>("http://localhost:5000/api/data");
+                await client.GetFromJsonAsync<List<DataItem>>($"{NGROK_URL}/api/data");
             
             if (allData != null)
             {
