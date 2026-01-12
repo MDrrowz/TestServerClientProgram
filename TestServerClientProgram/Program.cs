@@ -91,7 +91,7 @@ class Program
 		    
 			// 1. Prompt for Key with Escape support
 			Console.Write(enterKeyText);
-			string? rawkey = ReadLineOrEscape();
+			string? rawkey = await ReadLineOrEscape();
 			if (rawkey == null) return; // User pressed ESC, exit to menu
 			
 			string key = rawkey.Trim();
@@ -109,7 +109,7 @@ class Program
 			while(!itemUploaded) // Loop until valid integer or ESC
             {
                 Console.Write(enterValueText);
-                string? valueStr = ReadLineOrEscape();
+                string? valueStr = await ReadLineOrEscape();
                 if (valueStr == null) return; // User pressed ESC, exit to menu
 
                 if (!int.TryParse(valueStr, out int value))
@@ -124,7 +124,10 @@ class Program
                 }
                 
                 // 3. Attempt to upload
-                var response = await client.PostAsJsonAsync("api/data", new DataItem { Key = key, Value = value });
+                var response = await client.PostAsJsonAsync(
+                "api/data", 
+                new DataItem { Key = key, Value = value }
+                );
                 if (response.IsSuccessStatusCode)
                 {
                     Console.WriteLine($"Success: Data uploaded. ({key}, {value})");
@@ -157,7 +160,7 @@ class Program
             Console.Write("Enter Key to delete: ");
             
             // Use the custom helper to listen for ESC
-            string? key = ReadLineOrEscape(); 
+            string? key = await ReadLineOrEscape(); 
             
             // If user pressed ESC, return to main menu
             if (key == null) break; 
@@ -302,9 +305,10 @@ class Program
     
     /// Helper to read a line of input while monitoring for the Escape key.
 	/// Returns null if Escape is pressed, otherwise returns the string entered.	
-	static string? ReadLineOrEscape()
+	static async Task<string?> ReadLineOrEscape()
 	{
 		string input = "";
+		await Task.Delay(100);
 		while (true)
 		{
 			ConsoleKeyInfo keyInfo = Console.ReadKey(true);
