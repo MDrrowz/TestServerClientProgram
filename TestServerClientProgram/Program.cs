@@ -348,7 +348,7 @@ class Program
     // Helper to pause and clear console
     static async Task ResetUI()
     {
-                Console.Write("\nPress any key to conitunue...");
+                Console.Write("\nPress any key to continue...");
                 Console.ReadKey();
                 Console.Clear();
     }
