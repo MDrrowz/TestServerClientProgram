@@ -334,36 +334,82 @@ class Program
     {
         try
         {
-            List<DataItem>? allData =
-                await client.GetFromJsonAsync<List<DataItem>>($"{NGROK_URL}/api/data");
-            
-            if (allData != null)
+            // Use relative path because BaseAddress is already set to NGROK_URL
+            var allData = await client.GetFromJsonAsync<List<DataItem>>("api/data");
+
+            if (allData != null && allData.Count > 0)
             {
-            Console.WriteLine("Retrieved Data:");
-            int i = 1;
-                foreach (DataItem item in allData)
+                Console.WriteLine("\n--- Current Database State ---");
+                int i = 1;
+                foreach (var item in allData)
                 {
-                    Console.WriteLine($"{i} - Key={item.Key}, Value={item.Value}");
+                    // Numbered formatting for better readability
+                    Console.WriteLine($"{i}. Key: {item.Key,-10} Value: {item.Value}");
                     i++;
                 }
-            }                            
+            }
         }
-        catch (HttpRequestException ex)
+        // Specifically catch the 409 Conflict your server throws for empty tables
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
         {
-            Console.WriteLine("Network or server error:");
-            Console.WriteLine(ex.Message);
-        }
-        catch (TaskCanceledException)
-        {
-            Console.WriteLine("Request timed out.");
+            Console.WriteLine("\n[INFO] Database is currently empty.");
         }
         catch (Exception ex)
         {
-            Console.WriteLine("Unexpected error:");
-            Console.WriteLine(ex);
-        }    
+            Console.WriteLine($"\n[ERROR] Could not retrieve data: {ex.Message}");
+        }
     }
-    
+
+    static async Task<bool> RunDiagnostics(HttpClient client)
+    {
+        // 1. VERIFY TUNNEL: Check if the Ngrok URL is active
+        try
+        {
+            var response = await client.GetAsync("/health");
+            if (response.IsSuccessStatusCode)
+            {
+                Console.WriteLine("[PASS] Tunnel: Connection established to RHEL/WSL server.");
+            }
+            else
+            {
+                Console.WriteLine($"[FAIL] Tunnel: Reached ngrok, but server returned {response.StatusCode}.");
+                return false;
+            }
+        }
+        catch (HttpRequestException ex)
+        {
+            Console.WriteLine($"[FAIL] Tunnel: Could not reach the ngrok endpoint.");
+            Console.WriteLine($"       Check: Is ngrok running in your RHEL 10 terminal?");
+            Console.WriteLine($"       Details: {ex.Message}");
+            return false;
+        }
+
+        // 2. VERIFY DATABASE: Check if SQLite can be queried (Write test)
+        try
+        {
+            // Testing the 'GetAll' endpoint to see if DB is locked or file missing
+            var dbResponse = await client.GetAsync("api/data");
+            
+            // Your server returns 409 Conflict if DB is empty, which is a "Success" for connectivity
+            if (dbResponse.StatusCode == HttpStatusCode.OK || dbResponse.StatusCode == HttpStatusCode.Conflict)
+            {
+                Console.WriteLine("[PASS] Database: SQLite is online and accessible.");
+            }
+            else
+            {
+                Console.WriteLine($"[FAIL] Database: Server responded with error {dbResponse.StatusCode}.");
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[FAIL] Database: Unexpected server error during data test.");
+            Console.WriteLine($"       Details: {ex.Message}");
+            return false;
+        }
+
+        return true;
+    }
     static async Task UploadData(HttpClient client, DataItem item)
     {
         // ---- UPLOAD DATA ----        
@@ -406,7 +452,7 @@ class Program
             Console.WriteLine(ex);
         }
     }
-    
+        
     static async Task RequestValue(HttpClient client, string key)
     {
         // ---- RETRIEVE VALUE ----            
