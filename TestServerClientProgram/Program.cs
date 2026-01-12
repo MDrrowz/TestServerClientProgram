@@ -1,10 +1,8 @@
 ﻿// CLIENT
 // Test Data Server Program
 
-
 using System.Net.Http.Json;
 using System.Net;
-
 
 // Same model as the server
 public class DataItem
@@ -14,15 +12,12 @@ public class DataItem
 }
 
 class Program
-{
-    
-    static readonly string[] keys = ["score", "place", "color"];
-    static readonly int[] values = [123, 430, 69];
-	
+{	
 	const string NGROK_URL = "https://sulkiest-lucina-dandyish.ngrok-free.dev";
     
     static async Task Main()
     {
+        // SETUP HTTP CLIENT
         using HttpClient client = new()
         {
             BaseAddress = new Uri(NGROK_URL),
@@ -32,177 +27,197 @@ class Program
 		// GEMINI: bypasses the NGROK browser warning for automated requests
 		client.DefaultRequestHeaders.Add("ngrok-skip-browser-warning", "true");
 		
+		// RUN DIAGNOSTICS
 		Console.WriteLine("--- RUNNING DIAGNOSTICS ---");
 		if(!await RunDiagnostics(client))
 		{
 			Console.WriteLine("\n[ERROR] Fatal setup issue. Resolve the items above.");
 			Console.ReadLine();
 			return;
-		}
-		
-		Console.WriteLine("\n--- DIAGNOSTICS PASSES ---");
+		}		
+		Console.WriteLine("--- DIAGNOSTICS PASSED ---");
 		
 		bool exit = false;
-        while (!exit)
+		const string exitLabel = "[ESC].";
+		string[] menuOptions = [
+            "Upload new key-value pair",
+            "Delete an existing key",
+            "List all stored data",
+            "Exit"
+        ];
+        while (!exit) // Main menu loop
         {
+            await ResetUI();
             Console.WriteLine("\n--- Test Data Server Menu ---");
-            Console.WriteLine("1. Upload new key-value pair");
-            Console.WriteLine("2. Delete an existing key");
-            Console.WriteLine("3. List all stored data");
-            Console.WriteLine("4. Exit");
+            for (int i = 0; i < menuOptions.Length; i++)
+            {
+                if (i < menuOptions.Length - 1) Console.Write($"{i + 1}.");
+                else Console.Write(exitLabel);
+                Console.SetCursorPosition(exitLabel.Length + 1, Console.CursorTop);
+                Console.WriteLine($"{menuOptions[i]}");
+            }            
             Console.Write("\nSelect an option: ");
 
-            switch (Console.ReadLine())
+            // Use ReadKey for immediate response
+            var choice = Console.ReadKey(true);
+            switch (choice.Key)
             {
-                case "1":
+                case ConsoleKey.D1: case ConsoleKey.NumPad1:
                     await HandleUpload(client);
                     break;
-                case "2":
+                case ConsoleKey.D2: case ConsoleKey.NumPad2:
                     await HandleDelete(client);
                     break;
-                case "3":
+                case ConsoleKey.D3: case ConsoleKey.NumPad3:
                     await RetrieveData(client);
                     break;
-                case "4":
+                case ConsoleKey.Escape: case ConsoleKey.D4:
                     exit = true;
                     break;
-                default:
-                    Console.WriteLine("Invalid selection. Try again.");
-                    break;
             }
-        }
-        
-        var a = Console.ReadLine();
-    }
+        }        
+        await ResetUI();
+    }	
 	
 	// DATA upload
 	static async Task HandleUpload(HttpClient client)
     {
-		Console.WriteLine("\n[UPLOAD MODE] Press ESC at any time to cancel and return to menu.");
-		
+        Console.Clear();
 		while(true)
 		{
+            const string uploadHeader = "\n[UPLOAD MODE] Press ESC at any time to cancel and return to menu.";
+            const string enterKeyText = "Enter Key: ";
+            Console.WriteLine(uploadHeader);
+		    
 			// 1. Prompt for Key with Escape support
-			Console.Write("Enter Key: ");
-			string? key = ReadLineOrEscape();
-			if (key == null) return; // User pressed ESC, exit to menu
+			Console.Write(enterKeyText);
+			string? rawkey = ReadLineOrEscape();
+			if (rawkey == null) return; // User pressed ESC, exit to menu
+			
+			string key = rawkey.Trim();
+			if (string.IsNullOrWhiteSpace(key) || key.Length > 13)
+            {
+                if(string.IsNullOrWhiteSpace(key) || string.IsNullOrEmpty(key)) Console.WriteLine("ERROR: Invalid key. Cannot be empty.");
+                if (key.Length > 13) Console.WriteLine($"ERROR: Invalid key. Maximum length is 13 characters. (key={key})");
+                await ResetUI();
+                continue;
+            }
 
 			// 2. Prompt for Value
-			Console.Write("Enter Integer Value: ");
-			string? valueStr = ReadLineOrEscape();
-			if (valueStr == null) return; // User pressed ESC, exit to menu
+			const string enterValueText = "Enter Integer Value: "; 
+			bool itemUploaded = false;
+			while(!itemUploaded) // Loop until valid integer or ESC
+            {
+                Console.Write(enterValueText);
+                string? valueStr = ReadLineOrEscape();
+                if (valueStr == null) return; // User pressed ESC, exit to menu
 
-			if (!int.TryParse(valueStr, out int value))
-			{
-				Console.WriteLine("Invalid value. Must be an integer.");
-				return;
-			}
-
-			var item = new DataItem { Key = key, Value = value };
-			var response = await client.PostAsJsonAsync("api/data", item);
-
-			if (response.IsSuccessStatusCode)
-				Console.WriteLine($"Success: Data uploaded. ({key}, {value}");
-			else if (response.StatusCode == HttpStatusCode.Conflict)
-				Console.WriteLine($"Error: Key is already in use. (key={key}");
-			else
-				Console.WriteLine($"Error: {response.StatusCode}");
+                if (!int.TryParse(valueStr, out int value))
+                {
+                    Console.WriteLine("Invalid value. Must be an integer.");
+                    
+                    // Re-display header, entered key and enter value prompt
+                    await ResetUI();
+                    Console.WriteLine(uploadHeader);
+                    Console.Write(enterKeyText + key + "\n"); // Re-display entered key
+                    continue;
+                }
+                
+                // 3. Attempt to upload
+                var response = await client.PostAsJsonAsync("api/data", new DataItem { Key = key, Value = value });
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"Success: Data uploaded. ({key}, {value})");
+                    await ResetUI();
+                    itemUploaded = true;
+                    continue;
+                }
+                else if (response.StatusCode == HttpStatusCode.Conflict)
+                {
+                    Console.WriteLine($"Error: Key is already in use. (key={key}");
+                    await ResetUI();
+                }
+                else
+                {                
+                    Console.WriteLine($"Error: {response.StatusCode}");
+                    await ResetUI();
+                }
+                await Task.Delay(100); // Small delay before retrying
+            }
+        await Task.Delay(100); // Small delay before next upload
 		}
     }
-	
-	/// Helper to read a line of input while monitoring for the Escape key.
-	/// Returns null if Escape is pressed, otherwise returns the string entered.	
-	static string? ReadLineOrEscape()
-	{
-		string input = "";
-		while (true)
-		{
-			ConsoleKeyInfo keyInfo = Console.ReadKey(true);
-
-			// Check for Escape key
-			if (keyInfo.Key == ConsoleKey.Escape)
-			{
-				Console.WriteLine(" [Cancelled]");
-				return null;
-			}
-
-			// Check for Enter key to finish input
-			if (keyInfo.Key == ConsoleKey.Enter)
-			{
-				Console.WriteLine();
-				return input;
-			}
-
-			// Handle Backspace
-			if (keyInfo.Key == ConsoleKey.Backspace)
-			{
-				if (input.Length > 0)
-				{
-					input = input[..^1];
-					Console.Write("\b \b"); // Move back, write space, move back again
-				}
-			}
-			// Handle standard character input
-			else if (!char.IsControl(keyInfo.KeyChar))
-			{
-				input += keyInfo.KeyChar;
-				Console.Write(keyInfo.KeyChar);
-			}
-		}
-	}
-
-
+		
+    // DATA deletion
 	static async Task HandleDelete(HttpClient client)
-	{
-		Console.Write("\nEnter Key to delete: ");
-		string key = Console.ReadLine() ?? "";
+    {
+        while (true)
+        {
+            Console.WriteLine("\n[DELETE MODE] Press ESC to return to main menu.");
+            Console.Write("Enter Key to delete: ");
+            
+            // Use the custom helper to listen for ESC
+            string? key = ReadLineOrEscape(); 
+            
+            // If user pressed ESC, return to main menu
+            if (key == null) break; 
+            
+            if (string.IsNullOrWhiteSpace(key)) continue;
 
-		if (string.IsNullOrWhiteSpace(key)) return;
+            try
+            {
+                // 1. Fetch data to display for confirmation
+                HttpResponseMessage getResponse = await client.GetAsync($"api/data/{key}");
+                
+                if (!getResponse.IsSuccessStatusCode)
+                {
+                    if (getResponse.StatusCode == HttpStatusCode.NotFound)
+                        {
+                        Console.WriteLine(">> Error: Key not found.");
+                        await ResetUI();
+                        }
+                    else
+                    {
+                        Console.WriteLine($">> Error retrieving record: {getResponse.StatusCode}");
+                        await ResetUI();
+                    }
+                    continue;
+                }
 
-		try
-		{
-			// 1. Fetch current data to display to user
-			HttpResponseMessage getResponse = await client.GetAsync($"api/data/{key}");
-			
-			if (!getResponse.IsSuccessStatusCode)
-			{
-				if (getResponse.StatusCode == HttpStatusCode.NotFound)
-					Console.WriteLine("Error: Key not found.");
-				else
-					Console.WriteLine($"Error retrieving record: {getResponse.StatusCode}");
-				return;
-			}
+                DataItem? item = await getResponse.Content.ReadFromJsonAsync<DataItem>();
+                if (item == null) continue;
 
-			DataItem? item = await getResponse.Content.ReadFromJsonAsync<DataItem>();
-			if (item == null) return;
+                // 2. Request confirmation
+                Console.WriteLine($"\n>> Found: [Key: {item.Key}, Value: {item.Value}]");
+                Console.Write(">> Delete this record? (y/n): ");
+                
+                ConsoleKeyInfo confirm = Console.ReadKey(intercept: true);
+                Console.WriteLine(); 
 
-			// 2. Request confirmation
-			Console.WriteLine($"\nRecord Found: [Key: {item.Key}, Value: {item.Value}]");
-			Console.Write("Are you sure you want to delete this record? (y/n): ");
-			
-			ConsoleKeyInfo confirm = Console.ReadKey(intercept: true);
-			Console.WriteLine(); // New line after key press
+                if (confirm.Key != ConsoleKey.Y)
+                {
+                    Console.WriteLine(">> Deletion cancelled.");
+                    await ResetUI();
+                    continue;
+                }
 
-			if (confirm.Key != ConsoleKey.Y)
-			{
-				Console.WriteLine("Deletion cancelled.");
-				return;
-			}
+                // 3. Perform Deletion
+                HttpResponseMessage deleteResponse = await client.DeleteAsync($"api/data/{key}");
 
-			// 3. Proceed with deletion
-			HttpResponseMessage deleteResponse = await client.DeleteAsync($"api/data/{key}");
+                if (deleteResponse.IsSuccessStatusCode)
+                    Console.WriteLine($">> Success: Key '{key}' deleted.");
+                else
+                    Console.WriteLine($">> Error during deletion: {deleteResponse.StatusCode}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($">> Unexpected error: {ex.Message}");                
+            }
+            await ResetUI();
+        }
+    }
 
-			if (deleteResponse.IsSuccessStatusCode)
-				Console.WriteLine($"Success: Key '{key}' has been permanently deleted.");
-			else
-				Console.WriteLine($"Error during deletion: {deleteResponse.StatusCode}");
-		}
-		catch (Exception ex)
-		{
-			Console.WriteLine($"An unexpected error occurred: {ex.Message}");
-		}
-	}
-	   
+    // DATA retrieval
     static async Task RetrieveData(HttpClient client)
     {
         try
@@ -217,7 +232,7 @@ class Program
                 foreach (var item in allData)
                 {
                     // Numbered formatting for better readability
-                    Console.WriteLine($"{i}. Key: {item.Key,-10} Value: {item.Value}");
+                    Console.WriteLine($"{i}. Key: {item.Key,-15} Value: {item.Value}");
                     i++;
                 }
             }
@@ -233,6 +248,7 @@ class Program
         }
     }
 
+    // DIAGNOSTICS
     static async Task<bool> RunDiagnostics(HttpClient client)
     {
         // 1. VERIFY TUNNEL: Check if the Ngrok URL is active
@@ -283,82 +299,54 @@ class Program
 
         return true;
     }
-    static async Task UploadData(HttpClient client, DataItem item)
-    {
-        // ---- UPLOAD DATA ----        
-        try
-        {
-            HttpResponseMessage postResponse =
-                await client.PostAsJsonAsync("api/data", item);
-                
-            if (postResponse.StatusCode == HttpStatusCode.Conflict)
-            {
-                string error = await postResponse.Content.ReadAsStringAsync();
-                Console.WriteLine($"Upload failed (duplicate key): {error}");
-            }
-            else
-            {
-                try                
-                {
-                    postResponse.EnsureSuccessStatusCode();
-                    Console.WriteLine("Data uploaded.");
-                }
-                catch(Exception ex)
-                {
-                    Console.WriteLine("Unexpected error:");
-                    Console.WriteLine(ex);                    
-                }
-            }       
-        }
-        catch (HttpRequestException ex)
-        {
-            Console.WriteLine("Network or server error:");
-            Console.WriteLine(ex.Message);
-        }
-        catch (TaskCanceledException)
-        {
-            Console.WriteLine("Request timed out.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Unexpected error:");
-            Console.WriteLine(ex);
-        }
-    }
-        
-    static async Task RequestValue(HttpClient client, string key)
-    {
-        // ---- RETRIEVE VALUE ----            
-        try
-        {
-            HttpResponseMessage getResponse =
-                await client.GetAsync($"api/data/{key}");
+    
+    /// Helper to read a line of input while monitoring for the Escape key.
+	/// Returns null if Escape is pressed, otherwise returns the string entered.	
+	static string? ReadLineOrEscape()
+	{
+		string input = "";
+		while (true)
+		{
+			ConsoleKeyInfo keyInfo = Console.ReadKey(true);
 
-            if (getResponse.IsSuccessStatusCode)
-            {
-                DataItem? result =
-                await getResponse.Content.ReadFromJsonAsync<DataItem>();
+			// Check for Escape key
+			if (keyInfo.Key == ConsoleKey.Escape)
+			{
+				Console.WriteLine(" [Cancelled]");
+				return null;
+			}
 
-            // Console.WriteLine($"Retrieved value: {result?.Value} (key={key})");
-            }                    
-            else
-            {
-                Console.WriteLine("Data not found.");
-            }  
-        }                
-        catch (HttpRequestException ex)
-        {
-            Console.WriteLine("Network or server error:");
-            Console.WriteLine(ex.Message);
-        }
-        catch (TaskCanceledException)
-        {
-            Console.WriteLine("Request timed out.");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("Unexpected error:");
-            Console.WriteLine(ex);
-        }       
+			// Check for Enter key to finish input
+			if (keyInfo.Key == ConsoleKey.Enter)
+			{
+				Console.WriteLine();
+				return input;
+			}
+
+			// Handle Backspace
+			if (keyInfo.Key == ConsoleKey.Backspace)
+			{
+				if (input.Length > 0)
+				{
+					input = input[..^1];
+					Console.Write("\b \b"); // Move back, write space, move back again
+				}
+			}
+			// Handle standard character input
+			else if (!char.IsControl(keyInfo.KeyChar))
+			{
+				input += keyInfo.KeyChar;
+				Console.Write(keyInfo.KeyChar);
+			}
+		}
+	}
+
+    // Helper to pause and clear console
+    static async Task ResetUI()
+    {
+                Console.Write("\nPress any key to conitunue...");
+                Console.ReadKey();
+                Console.Clear();
     }
+    
 }
