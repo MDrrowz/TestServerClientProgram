@@ -30,12 +30,12 @@ class Program
         };
         
 		// GEMINI: bypasses the NGROK browser warning for automated requests
-		Client.DefaultRequestHeaders.Add("ngrok-skip-browser-warning", "true");
+		client.DefaultRequestHeaders.Add("ngrok-skip-browser-warning", "true");
 		
-		Console-WriteLine("--- SYSTEM DIAGNOSTICS ---");
+		Console.WriteLine("--- RUNNING DIAGNOSTICS ---");
 		if(!await RunDiagnostics(client))
 		{
-			Console.WriteLine("\n[ERROR] Fatal setup issue. Resolve the items above.")
+			Console.WriteLine("\n[ERROR] Fatal setup issue. Resolve the items above.");
 			Console.ReadLine();
 			return;
 		}
@@ -71,25 +71,6 @@ class Program
                     break;
             }
         }
-				
-        // foreach (string key in keys)
-        // {
-            // int index = Array.IndexOf(keys, key);
-            
-            // // Console.WriteLine($"index={index}, key={key}");
-            
-            // var item = new DataItem
-            // {
-            // Key = key,
-            // Value = values[index]
-            // };
-            
-            // await UploadData(client, item);
-            
-            // await RequestValue(client, key);
-        // }
-        
-        // await RetrieveData(client);
         
         var a = Console.ReadLine();
     }
@@ -99,7 +80,7 @@ class Program
     {
 		Console.WriteLine("\n[UPLOAD MODE] Press ESC at any time to cancel and return to menu.");
 		
-		while(!!)
+		while(true)
 		{
 			// 1. Prompt for Key with Escape support
 			Console.Write("Enter Key: ");
@@ -130,36 +111,7 @@ class Program
     }
 	
 	/// Helper to read a line of input while monitoring for the Escape key.
-	/// Returns null if Escape is pressed, otherwise returns the string entered.
-	static async Task<string?> GetInputOrEscape()
-	{
-		string input = "";
-		while (true)
-		{
-			if (Console.KeyAvailable)
-			{
-				var key = Console.ReadKey(true);
-				if (key.Key == ConsoleKey.Escape) return null;
-				if (key.Key == ConsoleKey.Enter) 
-				{
-					Console.WriteLine();
-					return input;
-				}
-				if (key.Key == ConsoleKey.Backspace && input.Length > 0)
-				{
-					input = input[..^1];
-					Console.Write("\b \b"); // Erase character from console
-				}
-				else if (!char.IsControl(key.KeyChar))
-				{
-					input += key.KeyChar;
-					Console.Write(key.KeyChar);
-				}
-			}
-			await Task.Delay(10); // Prevent CPU spiking
-		}
-	}
-	
+	/// Returns null if Escape is pressed, otherwise returns the string entered.	
 	static string? ReadLineOrEscape()
 	{
 		string input = "";
@@ -250,86 +202,7 @@ class Program
 			Console.WriteLine($"An unexpected error occurred: {ex.Message}");
 		}
 	}
-
-
-    static async Task RetrieveData(HttpClient client)
-    {
-        try
-        {
-            var allData = await client.GetFromJsonAsync<List<DataItem>>("api/data");
-            if (allData != null)
-            {
-                Console.WriteLine("\nStored Data:");
-                allData.ForEach(d => Console.WriteLine($" - {d.Key}: {d.Value}"));
-            }
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
-        {
-            Console.WriteLine("Database is currently empty.");
-        }
-    }
-
-    static async Task<bool> RunDiagnostics(HttpClient client)
-    {
-        try {
-            var response = await client.GetAsync("/health");
-            if (response.IsSuccessStatusCode) return true;
-        } catch { }
-        Console.WriteLine("Critical Error: Server unreachable via ngrok.");
-        return false;
-    }
-}
-	
-	
-	static async Task<bool> RunDiagnostics(HttpClient client)
-    {
-        // 1. VERIFY TUNNEL: Check if the Ngrok URL is active
-        try
-        {
-            var response = await client.GetAsync("/health");
-            if (response.IsSuccessStatusCode)
-            {
-                Console.WriteLine("[PASS] Tunnel: Connection established to RHEL/WSL server.");
-            }
-            else
-            {
-                Console.WriteLine($"[FAIL] Tunnel: Reached ngrok, but server returned {response.StatusCode}.");
-                return false;
-            }
-        }
-        catch (HttpRequestException ex)
-        {
-            Console.WriteLine($"[FAIL] Tunnel: Could not reach the ngrok endpoint.");
-            Console.WriteLine($"       Check: Is ngrok running in your RHEL 10 terminal?");
-            return false;
-        }
-
-        // 2. VERIFY DATABASE: Check if SQLite can be queried (Write test)
-        try
-        {
-            // Testing the 'GetAll' endpoint to see if DB is locked or file missing
-            var dbResponse = await client.GetAsync("api/data");
-            
-            // Your server returns 409 Conflict if DB is empty, which is a "Success" for connectivity
-            if (dbResponse.StatusCode == HttpStatusCode.OK || dbResponse.StatusCode == HttpStatusCode.Conflict)
-            {
-                Console.WriteLine("[PASS] Database: SQLite is online and accessible.");
-            }
-            else
-            {
-                Console.WriteLine($"[FAIL] Database: Server responded with error {dbResponse.StatusCode}.");
-                return false;
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[FAIL] Database: Unexpected server error during data test.");
-            return false;
-        }
-
-        return true;
-    }
-	    
+	   
     static async Task RetrieveData(HttpClient client)
     {
         try
