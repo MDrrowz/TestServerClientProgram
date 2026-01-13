@@ -11,6 +11,15 @@ public class DataItem
     public int Value { get; set; }
 }
 
+public class AdminLoginRequest
+{
+    public string Password { get; set; } = "";
+}
+public class AdminLoginResponse
+{
+    public string Token { get; set; } = "";
+}
+
 class Program
 {	
 	const string NGROK_URL = "https://sulkiest-lucina-dandyish.ngrok-free.dev";
@@ -37,14 +46,19 @@ class Program
 		}		
 		Console.WriteLine("--- DIAGNOSTICS PASSED ---");
 		
+		// AUTHENTICATE ADMIN
+        await AuthenticateAdmin(client);
+		
 		bool exit = false;
-		const string exitLabel = "[ESC].";
+		const string exitLabel = "[ESC].";		
 		string[] menuOptions = [
             "Upload new key-value pair",
             "Delete an existing key",
             "List all stored data",
+            "Attempt Admin Login",
             "Exit"
         ];
+        
         while (!exit) // Main menu loop
         {
             await ResetUI();
@@ -71,11 +85,15 @@ class Program
                 case ConsoleKey.D3: case ConsoleKey.NumPad3:
                     await RetrieveData(client);
                     break;
-                case ConsoleKey.Escape: case ConsoleKey.D4:
+                case ConsoleKey.D4: case ConsoleKey.NumPad4:
+                    await AuthenticateAdmin(client);
+                    break;
+                case ConsoleKey.Escape:
                     exit = true;
                     break;
             }
-        }        
+        }
+        Console.WriteLine("\nExiting program. Goodbye!");
         await ResetUI();
     }	
 	
@@ -303,8 +321,105 @@ class Program
         return true;
     }
     
+    // Helper to pause and clear console
+    static async Task ResetUI()
+    {
+                await Task.Delay(50);
+                Console.Write("\nPress any key to continue...");
+                Console.ReadKey();
+                Console.Clear();
+    }
+    
+    // ADMIN AUTHENTICATION
+    static async Task AuthenticateAdmin(HttpClient client)
+    {        
+        string? authToken = null;
+        bool isGuest = true;
+        while(authToken == null && !isGuest)
+        {
+            Console.Clear();
+            Console.WriteLine("\n--- Authorize Admin Priviledges ---");
+            Console.WriteLine(">> [ESC] to continue as guest.\n");
+            Console.Write("Enter Admin Password: ");
+            string? inputPassword = ReadPasswordMasked();
+
+            if (inputPassword == null) break;
+            
+            try
+            {
+                // Send login request
+                var response = await client.PostAsJsonAsync("api/auth/login", new AdminLoginRequest { Password = inputPassword });
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<AdminLoginResponse>();
+                    authToken = result?.Token;                    
+                    if (authToken != null)
+                    {
+                        try
+                        {
+                            // Set the Authorization header for admin requests
+                            client.DefaultRequestHeaders.Authorization = 
+                                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", authToken);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"\n[ERROR] Failed to set auth token: {ex.Message}");
+                            await ResetUI();
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("\n[ERROR] Failed to retrieve auth token. (null token)");
+                        await ResetUI();
+                        continue;
+                    }
+                }
+                
+                Console.WriteLine("\n[ERROR] Invalid Password.");
+                await ResetUI();
+                authToken = null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\n[ERROR] Connection failed: {ex.Message}");
+                await ResetUI();
+                authToken = null;
+            }
+        }
+        Console.WriteLine("Admin login successful...");
+        await ResetUI();
+    }
+    
+    // Helper to read password input with masking
+    static string? ReadPasswordMasked()
+    {
+        string? password = null;
+        ConsoleKeyInfo key;
+
+        do {
+            key = Console.ReadKey(true);
+            if (key.Key == ConsoleKey.Escape)
+            {
+                return null;
+            }
+            else if (key.Key == ConsoleKey.Backspace&& password != null && password.Length > 0)
+            {
+                password = password[..^1];
+                Console.Write("\b \b");
+            }
+            else if (!char.IsControl(key.KeyChar))
+            {
+                password += key.KeyChar;
+                Console.Write("*");
+            }
+        } while (key.Key != ConsoleKey.Enter);
+
+        Console.WriteLine();
+        return password;
+    }
+
     /// Helper to read a line of input while monitoring for the Escape key.
-	/// Returns null if Escape is pressed, otherwise returns the string entered.	
 	static async Task<string?> ReadLineOrEscape()
 	{
 		string input = "";
@@ -345,12 +460,4 @@ class Program
 		}
 	}
 
-    // Helper to pause and clear console
-    static async Task ResetUI()
-    {
-                Console.Write("\nPress any key to continue...");
-                Console.ReadKey();
-                Console.Clear();
-    }
-    
 }
