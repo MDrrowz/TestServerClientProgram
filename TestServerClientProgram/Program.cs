@@ -22,8 +22,7 @@ public class AdminLoginResponse
 
 class Program
 {	
-	const string NGROK_URL = "https://sulkiest-lucina-dandyish.ngrok-free.dev";
-    
+	const string NGROK_URL = "https://sulkiest-lucina-dandyish.ngrok-free.dev/";
     static async Task Main()
     {
         // SETUP HTTP CLIENT
@@ -41,13 +40,15 @@ class Program
 		if(!await RunDiagnostics(client))
 		{
 			Console.WriteLine("\n[ERROR] Fatal setup issue. Resolve the items above.");
-			Console.ReadLine();
+			await ResetUI();
 			return;
 		}		
 		Console.WriteLine("--- DIAGNOSTICS PASSED ---");
+		await ResetUI();
 		
 		// AUTHENTICATE ADMIN
         await AuthenticateAdmin(client);
+        await ResetUI();
 		
 		bool exit = false;
 		const string exitLabel = "[ESC].";		
@@ -61,7 +62,7 @@ class Program
         
         while (!exit) // Main menu loop
         {
-            await ResetUI();
+            Console.Clear();
             Console.WriteLine("\n--- Test Data Server Menu ---");
             for (int i = 0; i < menuOptions.Length; i++)
             {
@@ -94,7 +95,7 @@ class Program
             }
         }
         Console.WriteLine("\nExiting program. Goodbye!");
-        await ResetUI();
+        Task.Delay(3000).Wait(); // Pause before exit
     }	
 	
 	// DATA upload
@@ -155,15 +156,16 @@ class Program
                 }
                 else if (response.StatusCode == HttpStatusCode.Conflict)
                 {
-                    Console.WriteLine($"Error: Key is already in use. (key={key}");
+                    Console.WriteLine($"Error: Key is already in use. (key = {key})");
                     await ResetUI();
+                    break; // Exit to main upload prompt
                 }
                 else
                 {                
                     Console.WriteLine($"Error: {response.StatusCode}");
                     await ResetUI();
+                    break; // Exit to main upload prompt
                 }
-                await Task.Delay(100); // Small delay before retrying
             }
         await Task.Delay(100); // Small delay before next upload
 		}
@@ -172,8 +174,45 @@ class Program
     // DATA deletion
 	static async Task HandleDelete(HttpClient client)
     {
+        Console.Clear();
+        // try 
+        // {
+        //     // 1. Server-side authorization check
+        //     // We call a lightweight endpoint that returns 200 OK for admins or 403 Forbidden for others
+        //     Console.WriteLine("--- Verifying Administrator Privileges ---");
+        //     HttpResponseMessage authCheck = await client.GetAsync("api/auth/check-admin");
+            
+        //     Console.WriteLine($"Authorization check response: {authCheck.StatusCode}");
+
+        //     if (!authCheck.IsSuccessStatusCode)
+        //     {
+        //         if (authCheck.StatusCode == HttpStatusCode.Forbidden || authCheck.StatusCode == HttpStatusCode.Unauthorized)
+        //         {
+        //             Console.WriteLine(">> Access Denied: Administrator privileges required.");
+        //         }
+        //         else
+        //         {
+        //             Console.WriteLine($">> Authorization check failed: {authCheck.StatusCode}");
+        //         }
+        //         await ResetUI();
+        //         return;
+        //     }
+        //     else
+        //     {
+        //     Console.WriteLine("--- Privileges Verified ---");
+        //     await ResetUI();                
+        //     }
+        // }
+        // catch (Exception ex)
+        // {
+        //     Console.WriteLine($">> Unexpected error during auth check: {ex.Message}");
+        //     await ResetUI();
+        //     return;
+        // }
+            
         while (true)
         {
+            Console.Clear();
             Console.WriteLine("\n[DELETE MODE] Press ESC to return to main menu.");
             Console.Write("Enter Key to delete: ");
             
@@ -262,10 +301,12 @@ class Program
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
         {
             Console.WriteLine("\n[INFO] Database is currently empty.");
+            await ResetUI();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"\n[ERROR] Could not retrieve data: {ex.Message}");
+            await ResetUI();
         }
     }
 
@@ -275,7 +316,10 @@ class Program
         // 1. VERIFY TUNNEL: Check if the Ngrok URL is active
         try
         {
-            var response = await client.GetAsync("/health");
+            var response = await client.GetAsync("health");
+            
+            Console.WriteLine($"Ngrok health check response:\n{response}"); 
+            
             if (response.IsSuccessStatusCode)
             {
                 Console.WriteLine("[PASS] Tunnel: Connection established to RHEL/WSL server.");
@@ -324,71 +368,60 @@ class Program
     // Helper to pause and clear console
     static async Task ResetUI()
     {
-                await Task.Delay(50);
-                Console.Write("\nPress any key to continue...");
-                Console.ReadKey();
-                Console.Clear();
+        await Task.Delay(50);
+        Console.Write("\nPress any key to continue...");
+        Console.ReadKey();
+        Console.Clear();
     }
     
     // ADMIN AUTHENTICATION
     static async Task AuthenticateAdmin(HttpClient client)
     {        
-        string? authToken = null;
-        bool isGuest = true;
-        while(authToken == null && !isGuest)
+        // Loop until successful login or guest exit
+        while(true)
         {
             Console.Clear();
             Console.WriteLine("\n--- Authorize Admin Priviledges ---");
             Console.WriteLine(">> [ESC] to continue as guest.\n");
             Console.Write("Enter Admin Password: ");
             string? inputPassword = ReadPasswordMasked();
+            Console.WriteLine(Environment.NewLine + inputPassword);
 
-            if (inputPassword == null) break;
+            if (inputPassword == null) 
+            {
+                Console.WriteLine("\nContinuing as guest...");
+                await ResetUI();
+                return;
+            }
             
             try
             {
-                // Send login request
                 var response = await client.PostAsJsonAsync("api/auth/login", new AdminLoginRequest { Password = inputPassword });
+                
+                Console.WriteLine($"Login response status: {response.StatusCode}");
                 
                 if (response.IsSuccessStatusCode)
                 {
                     var result = await response.Content.ReadFromJsonAsync<AdminLoginResponse>();
-                    authToken = result?.Token;                    
-                    if (authToken != null)
+                    if (!string.IsNullOrEmpty(result?.Token))
                     {
-                        try
-                        {
-                            // Set the Authorization header for admin requests
-                            client.DefaultRequestHeaders.Authorization = 
-                                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", authToken);
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"\n[ERROR] Failed to set auth token: {ex.Message}");
-                            await ResetUI();
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("\n[ERROR] Failed to retrieve auth token. (null token)");
+                        client.DefaultRequestHeaders.Authorization = 
+                            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", result.Token);
+                        
+                        Console.WriteLine("\nAdmin login successful...");
                         await ResetUI();
-                        continue;
+                        return; // EXIT loop and function on success
                     }
-                }
-                
+                }                
+                // If we reach here, the response was not successful
                 Console.WriteLine("\n[ERROR] Invalid Password.");
-                await ResetUI();
-                authToken = null;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"\n[ERROR] Connection failed: {ex.Message}");
-                await ResetUI();
-                authToken = null;
-            }
+            }            
+            await ResetUI();
         }
-        Console.WriteLine("Admin login successful...");
-        await ResetUI();
     }
     
     // Helper to read password input with masking
@@ -415,11 +448,10 @@ class Program
             }
         } while (key.Key != ConsoleKey.Enter);
 
-        Console.WriteLine();
         return password;
     }
 
-    /// Helper to read a line of input while monitoring for the Escape key.
+    // Helper to read a line of input while monitoring for the Escape key.
 	static async Task<string?> ReadLineOrEscape()
 	{
 		string input = "";
