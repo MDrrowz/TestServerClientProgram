@@ -3,6 +3,7 @@
 
 using System.Net.Http.Json;
 using System.Net;
+using System.IdentityModel.Tokens.Jwt;
 
 // Same model as the server
 public class DataItem
@@ -48,6 +49,8 @@ class Program
 		
 		// AUTHENTICATE ADMIN
         await AuthenticateAdmin(client);
+        
+        await IsUserAuthenticated(client); // Test if auth header is set correctly
 		
 		bool exit = false;
 		const string exitLabel = "[ESC].";		
@@ -96,6 +99,46 @@ class Program
         Console.WriteLine("\nExiting program. Goodbye!");
         Task.Delay(3000).Wait(); // Pause before exit
     }	
+    
+    // Auth Token/header check
+    static async Task<bool> IsUserAuthenticated(HttpClient client)
+    {
+        Console.Clear();
+        Console.WriteLine("--- Checking Admin Authentication Status ---");
+        
+        Console.WriteLine($"Client Authorization header: {client.DefaultRequestHeaders.Authorization}");
+
+        try
+        {
+            Console.WriteLine("Sending request to verify authentication...");
+            await Task.Delay(500); // Small delay for clarity    
+                    
+            // Call lightweight endpoint to verify admin status
+            var req = new HttpRequestMessage(HttpMethod.Get, "api/auth/check-admin");
+            req.Headers.Authorization = client.DefaultRequestHeaders.Authorization;
+            
+            var response = await client.SendAsync(req);
+
+            Console.WriteLine($"Auth check response: {response.StatusCode}");
+            if (response.IsSuccessStatusCode)
+            {
+                Console.WriteLine(">> User is verified as Admin.");
+            }
+            else
+            {
+                Console.WriteLine(">> User is NOT verified as Admin.");
+            }
+        await ResetUI();
+        return response.IsSuccessStatusCode;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(">> Error: Could not connect to server for auth check.");
+            Console.WriteLine($"Error: {e.Message}");
+            await ResetUI();
+            return false;
+        }
+    }
 	
 	// DATA upload
 	static async Task HandleUpload(HttpClient client)
@@ -174,40 +217,44 @@ class Program
 	static async Task HandleDelete(HttpClient client)
     {
         Console.Clear();
-        // try 
-        // {
-        //     // 1. Server-side authorization check
-        //     // We call a lightweight endpoint that returns 200 OK for admins or 403 Forbidden for others
-        //     Console.WriteLine("--- Verifying Administrator Privileges ---");
-        //     HttpResponseMessage authCheck = await client.GetAsync("api/auth/check-admin");
+        try 
+        {
+            // 1. Server-side authorization check
+            // We call a lightweight endpoint that returns 200 OK for admins or 403 for others
+            Console.WriteLine("--- Verifying Administrator Privileges ---");
             
-        //     Console.WriteLine($"Authorization check response: {authCheck.StatusCode}");
+            var authReq = new HttpRequestMessage(HttpMethod.Get, "api/auth/check-admin");
+            authReq.Headers.Authorization = client.DefaultRequestHeaders.Authorization;
+            HttpResponseMessage authCheck = await client.SendAsync(authReq);
 
-        //     if (!authCheck.IsSuccessStatusCode)
-        //     {
-        //         if (authCheck.StatusCode == HttpStatusCode.Forbidden || authCheck.StatusCode == HttpStatusCode.Unauthorized)
-        //         {
-        //             Console.WriteLine(">> Access Denied: Administrator privileges required.");
-        //         }
-        //         else
-        //         {
-        //             Console.WriteLine($">> Authorization check failed: {authCheck.StatusCode}");
-        //         }
-        //         await ResetUI();
-        //         return;
-        //     }
-        //     else
-        //     {
-        //     Console.WriteLine("--- Privileges Verified ---");
-        //     await ResetUI();                
-        //     }
-        // }
-        // catch (Exception ex)
-        // {
-        //     Console.WriteLine($">> Unexpected error during auth check: {ex.Message}");
-        //     await ResetUI();
-        //     return;
-        // }
+            
+            Console.WriteLine($"Authorization check response: {authCheck.StatusCode}");
+
+            if (!authCheck.IsSuccessStatusCode)
+            {
+                if (authCheck.StatusCode == HttpStatusCode.Forbidden || authCheck.StatusCode == HttpStatusCode.Unauthorized)
+                {
+                    Console.WriteLine(">> Access Denied: Administrator privileges required.");
+                }
+                else
+                {
+                    Console.WriteLine($">> Authorization check failed: {authCheck.StatusCode}");
+                }
+                await ResetUI();
+                return;
+            }
+            else
+            {
+            Console.WriteLine("--- Privileges Verified ---");
+            await ResetUI();                
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($">> Unexpected error during auth check: {ex.Message}");
+            await ResetUI();
+            return;
+        }
             
         while (true)
         {
@@ -261,7 +308,11 @@ class Program
                 }
 
                 // 3. Perform Deletion
-                HttpResponseMessage deleteResponse = await client.DeleteAsync($"api/data/{key}");
+                var request = new HttpRequestMessage(HttpMethod.Delete, $"api/data/{key}");
+                request.Headers.Authorization = client.DefaultRequestHeaders.Authorization;
+
+                HttpResponseMessage deleteResponse = await client.SendAsync(request);
+
 
                 if (deleteResponse.IsSuccessStatusCode)
                     Console.WriteLine($">> Success: Key '{key}' deleted.");
@@ -315,7 +366,7 @@ class Program
         // 1. VERIFY TUNNEL: Check if the Ngrok URL is active
         try
         {
-            var response = await client.GetAsync("health");
+            var response = await client.GetAsync("api/health");
             
             Console.WriteLine($"Ngrok health check response:\n{response}"); 
             
@@ -360,7 +411,29 @@ class Program
             Console.WriteLine($"       Details: {ex.Message}");
             return false;
         }
+        
+		// 3. VERIFY SERVER VERSION
+		try
+		{
+			var meta = await client.GetFromJsonAsync<Dictionary<string, object>>("api/meta");
 
+			if (meta == null)
+			{
+				Console.WriteLine("[FAIL] Server metadata missing.");
+				return false;
+			}
+
+			Console.WriteLine("[PASS] Server metadata:");
+			foreach (var kv in meta)
+				Console.WriteLine($"       {kv.Key}: {kv.Value}");
+		}
+		catch (Exception ex)
+		{
+			Console.WriteLine("[FAIL] Could not retrieve server metadata.");
+			Console.WriteLine($"       {ex.Message}");
+			return false;
+		}
+		
         return true;
     }
     
@@ -406,7 +479,12 @@ class Program
                 {                                                            
                     var result = await response.Content.ReadFromJsonAsync<AdminLoginResponse>();            
                     
-                    // Console.WriteLine($"Received token: {result?.Token}");
+                    var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                    var jwt = handler.ReadJwtToken(result?.Token);
+
+                    Console.WriteLine("JWT claims:");
+                    foreach (var c in jwt.Claims)
+                        Console.WriteLine($"  {c.Type} = {c.Value}");
                     
                     if (!string.IsNullOrEmpty(result?.Token))
                     {                        
