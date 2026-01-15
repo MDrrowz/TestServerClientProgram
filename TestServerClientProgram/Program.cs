@@ -48,7 +48,6 @@ class Program
 		
 		// AUTHENTICATE ADMIN
         await AuthenticateAdmin(client);
-        await ResetUI();
 		
 		bool exit = false;
 		const string exitLabel = "[ESC].";		
@@ -287,6 +286,7 @@ class Program
 
             if (allData != null && allData.Count > 0)
             {
+                Console.Clear();
                 Console.WriteLine("\n--- Current Database State ---");
                 int i = 1;
                 foreach (var item in allData)
@@ -301,13 +301,12 @@ class Program
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
         {
             Console.WriteLine("\n[INFO] Database is currently empty.");
-            await ResetUI();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"\n[ERROR] Could not retrieve data: {ex.Message}");
-            await ResetUI();
         }
+        await ResetUI();
     }
 
     // DIAGNOSTICS
@@ -396,19 +395,29 @@ class Program
             
             try
             {
+                Console.WriteLine($"Attempting to fetch token...");
+                await Task.Delay(500); // Small delay for clarity
+                
                 var response = await client.PostAsJsonAsync("api/auth/login", new AdminLoginRequest { Password = inputPassword });
                 
                 Console.WriteLine($"Login response status: {response.StatusCode}");
                 
                 if (response.IsSuccessStatusCode)
-                {
-                    var result = await response.Content.ReadFromJsonAsync<AdminLoginResponse>();
+                {                                                            
+                    var result = await response.Content.ReadFromJsonAsync<AdminLoginResponse>();            
+                    
+                    // Console.WriteLine($"Received token: {result?.Token}");
+                    
                     if (!string.IsNullOrEmpty(result?.Token))
-                    {
+                    {                        
+                        // Set the Authorization header for future requests
                         client.DefaultRequestHeaders.Authorization = 
                             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", result.Token);
+                            
+                        Console.WriteLine($"Authorization header set for future requests.");
+                        Console.WriteLine($">> Header: {client.DefaultRequestHeaders.Authorization.Scheme} {client.DefaultRequestHeaders.Authorization.Parameter}"); // Debug output
                         
-                        Console.WriteLine("\nAdmin login successful...");
+                        Console.WriteLine("\n--- Admin login successful ---");
                         await ResetUI();
                         return; // EXIT loop and function on success
                     }
