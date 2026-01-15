@@ -48,6 +48,8 @@ class Program
 		
 		// AUTHENTICATE ADMIN
         await AuthenticateAdmin(client);
+        
+        await IsUserAuthenticated(client); // Test if auth header is set correctly
 		
 		bool exit = false;
 		const string exitLabel = "[ESC].";		
@@ -96,6 +98,37 @@ class Program
         Console.WriteLine("\nExiting program. Goodbye!");
         Task.Delay(3000).Wait(); // Pause before exit
     }	
+    
+    // Auth Token/header check
+    static async Task<bool> IsUserAuthenticated(HttpClient client)
+    {
+        Console.Clear();
+        Console.WriteLine("--- Checking Admin Authentication Status ---");
+        try
+        {
+            Console.WriteLine("Sending request to verify authentication...");
+            await Task.Delay(500); // Small delay for clarity            
+            var response = await client.GetAsync("api/auth/check-admin");
+            Console.WriteLine($"Auth check response: {response.StatusCode}");
+            if (response.IsSuccessStatusCode)
+            {
+                Console.WriteLine(">> User is not verified as Admin.");
+            }
+            else
+            {
+                Console.WriteLine(">> User is NOT authenticated as Admin.");
+            }
+        await ResetUI();
+        return response.IsSuccessStatusCode;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(">> Error: Could not connect to server for auth check.");
+            Console.WriteLine($"Error: {e.Message}");
+            await ResetUI();
+            return false;
+        }
+    }
 	
 	// DATA upload
 	static async Task HandleUpload(HttpClient client)
